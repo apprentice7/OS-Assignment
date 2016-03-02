@@ -122,8 +122,6 @@ int main(){
 	bool builtinInvoke;
 	while(1){
 		in = test.shellWaitForInput();
-		//cout << "testcase1: " << in << endl;
-		//in = "cd desktop";
 		CMD = test.shellInputIntepreter(in);
 		// for(int j=0; j<CMD.size(); j++){
 		// 	cout << CMD[j] << endl;
