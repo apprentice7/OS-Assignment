@@ -8,11 +8,48 @@
 #include <string>
 #include <unistd.h>
 #include <limits.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 using namespace std;
 
 ///*
 class shell {
 public:
+
+	string shellWaitForInput(){
+		string input;
+		string shellLeft = "[TKShell:";
+		string shellRight = "]$:";
+		char cwd[PATH_MAX + 1];
+		int inputLen = 0;
+		if(getcwd(cwd, PATH_MAX+1) == NULL){
+			string cppcwd = cwd;
+			cout << "Current Working Dir: " << cppcwd << endl;
+		}
+		else{
+			string cppcwd = cwd;
+			cout << shellLeft << cppcwd << shellRight;
+		}
+
+		//get input from console
+		int a = getline (cin, input);
+		if(a == 0) input = "ctrl-d";
+		inputLen = input.size();
+		if(inputLen <= 0) {
+			input = "\n ";
+			return input;
+		}
+
+		//format the input string with one whitespace followed only
+		while(input[inputLen-1] == ' '){
+			input = input.substr(0, inputLen-1);
+			inputLen --;
+			//cout << "eliminate trailing whitespace"<< endl;
+		}
+		input = input + " ";
+		//cout << "testcase0: " << input << endl;
+		return input;
+	} 
 
 	vector<string> shellInputIntepreter(string input){
 		int startPoint = 0;
@@ -29,47 +66,21 @@ public:
 				}
 			}
 		}
-		// for(int j=0; j<token.size(); j++){
-		// 	cout << token[j] << endl;
-		// }
+
 		if(token[0] == "exit" || token[0] == "cd"){
-			//cout << "exit | cd" << endl;
 			token.insert(token.begin(), "built-in");
 		}
+		else if(token[0] == "ctrl-d"){
+			return token;
+		}
+		else if(token[0] == "\n"){
+			token.insert(token.begin(), "continue");
+		}
 		else{
-			//cout << "normal" << endl;
 			token.insert(token.begin(), "normalCMD");
 		}
 		return token;
 	}
-
-	string shellWaitForInput(){
-		string input;
-		string shellLeft = "[TKShell:";
-		string shellRight = "]$:";
-		char cwd[PATH_MAX + 1];
-		int inputLen = 0;
-		if(getcwd(cwd, PATH_MAX+1) == NULL){
-			string cppcwd = cwd;
-			cout << "Current Working Dir: " << cppcwd << endl;
-		}
-		else{
-			string cppcwd = cwd;
-			cout << shellLeft << cppcwd << shellRight;
-		}
-		getline (cin, input);
-
-		//format the input string with one whitespace followed only
-		inputLen = input.size();
-		while(input[inputLen-1] == ' '){
-			input = input.substr(0, inputLen-1);
-			inputLen --;
-			cout << "special testcase: " << input << endl;
-		}
-		input = input + " ";
-		//cout << "testcase0: " << input << endl;
-		return input;
-	} 
 
 	bool shellBuiltInChecker(vector<string> command){
 		int cmdSize = command.size();
@@ -108,8 +119,31 @@ public:
 		return true;
 	}
 
-	bool shellNormalCommandLine(vector<string> command){
-
+	void shellNormalCommandLine(vector<string> command){
+		pid_t child_pid;
+		if(!(child_pid = fork())) {
+			vector<char *> commandVector;
+			int cmdLenv = command.size();
+			for(int i=1; i<cmdLenv; i++){
+				char * tmp = new char[command[i].size()+1];
+				strcpy(tmp, command[i].c_str());
+				commandVector.push_back(tmp);
+			}
+			commandVector.push_back(NULL);
+			setenv("PATH","/bin:/usr/bin:.",1);
+			char **argList = &commandVector[0];
+			execvp(*argList,argList);
+			if(errno == ENOENT){
+				cout << "No Command found..." << endl;
+			}
+			else{
+				cout << "erron: " << errno << endl;
+			}
+		}
+		else{
+			wait(NULL);
+		}
+		return;
 	}
 };
 //*/
@@ -123,19 +157,24 @@ int main(){
 	while(1){
 		in = test.shellWaitForInput();
 		CMD = test.shellInputIntepreter(in);
-		// for(int j=0; j<CMD.size(); j++){
-		// 	cout << CMD[j] << endl;
-		// }
-		if(CMD[0] == "built-in"){
+
+		if(CMD[0] == "ctrl-d"){
+			cout << endl;
+			break;
+		}
+		else if(CMD[0] == "continue"){
+			continue;
+		}
+		else if(CMD[0] == "built-in"){
 			builtinChecker = test.shellBuiltInChecker(CMD);
 			if(builtinChecker == true){
 				builtinInvoke = test.shellInvokeBuiltinCMD(CMD);
 				if(builtinInvoke == false) return 0;
-				else cout << "finish" << endl;
+				//else cout << "finish" << endl;
 			}
 		}
 		else if(CMD[0] == "normalCMD"){
-
+			test.shellNormalCommandLine(CMD);
 		}
 	}
 
