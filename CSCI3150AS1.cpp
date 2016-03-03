@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <glob.h>
 using namespace std;
 
 ///*
@@ -145,6 +146,49 @@ public:
 		}
 		return;
 	}
+
+	void shellWildCardCommandLine(vector<string> command){
+		pid_t child_pid;
+		if(!(child_pid = fork())){
+			vector<string> cmdWithoutStar;
+			vector<string> cmdWithStar;
+			int offCount = 0;
+			int starCount = 0;
+			glob_t globbuf;
+
+			cmdWithoutStar.push_back(command[1]);
+			for(int i=2; i<command.size(); i++){
+				bool star = false;
+				for(int j=0; j<command[i].size(); j++){
+					if(command[i][j] == '*') star = true;
+				}
+				if(star == true){
+					cmdWithStar.push_back(command[i]);
+				}
+				else{
+					cmdWithoutStar.push_back(command[i]);
+					offCount++;
+				}
+			}
+
+			globbuf.gl_offs = offCount;
+			const char * firstWildCard = cmdWithStar[0].c_str();
+			glob(firstWildCard, GLOB_DOOFFS | GLOB_NOCHECK, NULL, &globbuf);
+			starCount = cmdWithStar.size();
+			for(int k=1; k<starCount; k++){
+				const char * tempWildCard = cmdWithStar[k].c_str();
+				glob(tempWildCard, GLOB_DOOFFS | GLOB_NOCHECK | GLOB_APPEND, NULL, &globbuf);
+			}
+
+
+			
+		}
+		else{
+			wait(NULL);
+		}
+		return;
+	}
+
 };
 //*/
 
@@ -152,8 +196,9 @@ int main(){
 	shell test;
 	string in;
 	vector<string> CMD;
-	bool builtinChecker;
-	bool builtinInvoke;
+	bool builtinChecker = false;
+	bool builtinInvoke = false;
+	bool wildCard = false;
 	while(1){
 		in = test.shellWaitForInput();
 		CMD = test.shellInputIntepreter(in);
@@ -174,7 +219,15 @@ int main(){
 			}
 		}
 		else if(CMD[0] == "normalCMD"){
-			test.shellNormalCommandLine(CMD);
+			for(int i=0; i<in.size(); i++){
+				if(in[i] == '*') wildCard = true;
+			}
+			if(wildCard == false){
+				test.shellNormalCommandLine(CMD);
+			}
+			else{
+				test.shellWildCardCommandLine(CMD);
+			}	
 		}
 	}
 
