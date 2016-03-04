@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <glob.h>
+#include <signal.h>
 using namespace std;
 
 ///*
@@ -55,11 +56,11 @@ public:
 	vector<string> shellInputIntepreter(string input){
 		int startPoint = 0;
 		vector<string> token;
+		
 		for(int i=0; i<input.size(); i++){
 			if(input[i] == ' ' || i == input.size() - 1){
 				if(startPoint == i) continue;
 				else{
-					//cout << "testcase3: " << startPoint << "    " << i << endl;
 					int cmdLen = i - startPoint;
 					string temp = input.substr(startPoint, cmdLen);
 					token.push_back(temp);
@@ -122,9 +123,16 @@ public:
 
 	void shellNormalCommandLine(vector<string> command){
 		pid_t child_pid;
+
 		if(!(child_pid = fork())) {
 			vector<char *> commandVector;
 			int cmdLenv = command.size();
+
+			signal(SIGINT,SIG_DFL); 
+			signal(SIGQUIT,SIG_DFL); 
+			signal(SIGTERM,SIG_DFL); 
+			signal(SIGTSTP,SIG_DFL);
+
 			for(int i=1; i<cmdLenv; i++){
 				char * tmp = new char[command[i].size()+1];
 				strcpy(tmp, command[i].c_str());
@@ -149,6 +157,7 @@ public:
 
 	void shellWildCardCommandLine(vector<string> command){
 		pid_t child_pid;
+
 		if(!(child_pid = fork())){
 			vector<string> cmdWithoutStar;
 			vector<string> cmdWithStar;
@@ -156,7 +165,13 @@ public:
 			int starCount = 0;
 			glob_t globbuf;
 
+			signal(SIGINT,SIG_DFL); 
+			signal(SIGQUIT,SIG_DFL); 
+			signal(SIGTERM,SIG_DFL); 
+			signal(SIGTSTP,SIG_DFL);
+
 			cmdWithoutStar.push_back(command[1]);
+			offCount++;
 			for(int i=2; i<command.size(); i++){
 				bool star = false;
 				for(int j=0; j<command[i].size(); j++){
@@ -179,9 +194,18 @@ public:
 				const char * tempWildCard = cmdWithStar[k].c_str();
 				glob(tempWildCard, GLOB_DOOFFS | GLOB_NOCHECK | GLOB_APPEND, NULL, &globbuf);
 			}
-
-
-			
+			for(int w=0; w<cmdWithoutStar.size(); w++){
+				char * tempCMD = new char[cmdWithoutStar[w].size()+1];
+				strcpy(tempCMD, cmdWithoutStar[w].c_str());
+				globbuf.gl_pathv[w] = tempCMD;
+			}
+			execvp(globbuf.gl_pathv[0],globbuf.gl_pathv);
+			if(errno == ENOENT){
+				cout << "No Command found...(star)" << endl;
+			}
+			else{
+				cout << "erron: (star)" << errno << endl;
+			}
 		}
 		else{
 			wait(NULL);
@@ -199,6 +223,12 @@ int main(){
 	bool builtinChecker = false;
 	bool builtinInvoke = false;
 	bool wildCard = false;
+
+	signal(SIGINT,SIG_IGN);
+	signal(SIGQUIT,SIG_IGN); 
+	signal(SIGTERM,SIG_IGN); 
+	signal(SIGTSTP,SIG_IGN);
+
 	while(1){
 		in = test.shellWaitForInput();
 		CMD = test.shellInputIntepreter(in);
@@ -215,7 +245,6 @@ int main(){
 			if(builtinChecker == true){
 				builtinInvoke = test.shellInvokeBuiltinCMD(CMD);
 				if(builtinInvoke == false) return 0;
-				//else cout << "finish" << endl;
 			}
 		}
 		else if(CMD[0] == "normalCMD"){
