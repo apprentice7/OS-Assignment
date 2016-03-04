@@ -56,7 +56,7 @@ public:
 	vector<string> shellInputIntepreter(string input){
 		int startPoint = 0;
 		vector<string> token;
-		
+
 		for(int i=0; i<input.size(); i++){
 			if(input[i] == ' ' || i == input.size() - 1){
 				if(startPoint == i) continue;
@@ -148,9 +148,11 @@ public:
 			else{
 				cout << "erron: " << errno << endl;
 			}
+
 		}
 		else{
-			wait(NULL);
+			//wait(NULL);
+			waitpid(child_pid, NULL, WUNTRACED);
 		}
 		return;
 	}
@@ -208,7 +210,8 @@ public:
 			}
 		}
 		else{
-			wait(NULL);
+			//wait(NULL);
+			waitpid(child_pid, NULL, WUNTRACED);
 		}
 		return;
 	}
