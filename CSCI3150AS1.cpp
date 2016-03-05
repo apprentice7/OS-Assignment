@@ -57,6 +57,7 @@ public:
 		int startPoint = 0;
 		vector<string> token;
 
+		//tokenize the input command
 		for(int i=0; i<input.size(); i++){
 			if(input[i] == ' ' || i == input.size() - 1){
 				if(startPoint == i) continue;
@@ -69,6 +70,7 @@ public:
 			}
 		}
 
+		//insert command type into the front of CMD vector
 		if(token[0] == "exit" || token[0] == "cd"){
 			token.insert(token.begin(), "built-in");
 		}
@@ -86,6 +88,8 @@ public:
 
 	bool shellBuiltInChecker(vector<string> command){
 		int cmdSize = command.size();
+
+		//return true when exit/cd built-in command with correct number of arguments
 		if(command[0] == "built-in"){
 			if(command[1] == "exit"){
 				if(cmdSize == 2)  return true;
@@ -107,6 +111,9 @@ public:
 	}
 
 	bool shellInvokeBuiltinCMD(vector<string> command){
+		//execute the built-in command
+		//return false if the shell needs to exit
+		//return true otherwise
 		if(command[1] == "exit"){
 			return false;
 		}
@@ -128,6 +135,7 @@ public:
 			vector<char *> commandVector;
 			int cmdLenv = command.size();
 
+			//enable the signals in child process
 			signal(SIGINT,SIG_DFL); 
 			signal(SIGQUIT,SIG_DFL); 
 			signal(SIGTERM,SIG_DFL); 
@@ -139,8 +147,12 @@ public:
 				commandVector.push_back(tmp);
 			}
 			commandVector.push_back(NULL);
+
+			//set the search path within certain range and order
 			setenv("PATH","/bin:/usr/bin:.",1);
 			char **argList = &commandVector[0];
+
+			//execute the normal command with execvp() function
 			execvp(*argList,argList);
 			if(errno == ENOENT){
 				cout << "No Command found..." << endl;
@@ -167,6 +179,7 @@ public:
 			int starCount = 0;
 			glob_t globbuf;
 
+			//enable the signals in child process
 			signal(SIGINT,SIG_DFL); 
 			signal(SIGQUIT,SIG_DFL); 
 			signal(SIGTERM,SIG_DFL); 
@@ -174,6 +187,8 @@ public:
 
 			cmdWithoutStar.push_back(command[1]);
 			offCount++;
+
+			//split the the command by command with star and without
 			for(int i=2; i<command.size(); i++){
 				bool star = false;
 				for(int j=0; j<command[i].size(); j++){
@@ -188,6 +203,7 @@ public:
 				}
 			}
 
+			//use glob() to accomplish wildcard search function
 			globbuf.gl_offs = offCount;
 			const char * firstWildCard = cmdWithStar[0].c_str();
 			glob(firstWildCard, GLOB_DOOFFS | GLOB_NOCHECK, NULL, &globbuf);
