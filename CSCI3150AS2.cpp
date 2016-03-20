@@ -16,8 +16,10 @@
 #include <signal.h>
 using namespace std;
 
+//Child process id for FIFO mode
 pid_t child_pid= (pid_t)-1;
 
+//Child process id for PARA mode
 vector<vector<pid_t> > childrenPid;
 
 ///*
@@ -29,10 +31,10 @@ public:
     Split string by \t into cmd & time
     [cmd, time] pairs will appear in the outString vector for further use
     */
-	vector<vector<string> > inputSplitter(){
+	vector<vector<string> > inputSplitter(string filename){
 		string inputString;
 		vector<vector<string> > outString;
-  		ifstream cmdFile ("read.txt");
+  		ifstream cmdFile (filename);
 
   		if (cmdFile.is_open()) {
     		while (getline(cmdFile,inputString)) {
@@ -84,7 +86,6 @@ public:
     */
 	void FIFOScheduler(vector<vector<string> > cmdString){
         //get the system tick per second
-        double tickPerSec = (double)sysconf(_SC_CLK_TCK);
         
         for(int i=0; i<cmdString.size(); i++){
             //Initialize and start the timer
@@ -113,21 +114,11 @@ public:
                     alarm(alarmTime);
                 }
                 wait(NULL);
-                //waitpid(child_pid, NULL, WUNTRACED);
-            }
-            endTime = times(&enTime);
+                endTime = times(&enTime);
             
-            //Print out the times usage
-            cout.precision(4);
-            cout << fixed; 
-            cout << "<<Process: " << child_pid << " >>" << endl;
-            cout << "Time Elapsed: " 
-                << (endTime - startTime)/tickPerSec << endl;
-            cout << "User Time: " 
-                << (enTime.tms_cutime - stTime.tms_cutime)/tickPerSec << endl;
-            cout << "System Time: " 
-                << (enTime.tms_cstime - stTime.tms_cstime)/tickPerSec << endl;
-            cout << endl;
+                //Print out the times usage
+                schedulingReport(startTime, endTime, stTime, enTime, child_pid);
+            }
         }
         return;
 	}
@@ -139,10 +130,8 @@ public:
     */
 	void ParaScheduler(vector<vector<string> > cmdString){
         //get the system tick per second
-        double tickPerSec = (double)sysconf(_SC_CLK_TCK);
 
         for(int i=0; i<cmdString.size(); i++){
-        //for(int i=0; i<1; i++){
             pid_t monitorChild;
             pid_t jobChild;
             vector<pid_t> tempPid;
@@ -152,24 +141,25 @@ public:
             
             //Monitor process counting the system time
             if(!(childrenPid[i][0] = fork())){
-                //Monitor process
-                
                 childrenPid[i][0] = getpid();
+
                 //Initialize and start the timer
                 clock_t startTime,endTime;
                 struct tms stTime;
                 struct tms enTime;
                 startTime = times(&stTime);
                 
+                //child process implementing input command
                 if(!(childrenPid[i][1] = fork())){
-                    //child process
                     vector<char *> cmdArglist;
                     cmdArglist = strTokenize(cmdString[i][0]);
                     setenv("PATH","/bin:/usr/bin:.",1);
                     char **argList = &cmdArglist[0];
 
-                    //for testing
-                    for(int i=0; i<1000000000; i++);
+                    childrenPid[i][1] = getpid();
+
+                    //for time testing
+                    //for(int i=0; i<100000000; i++);
 
                     //execute the normal command with execvp() function
                     execvp(*argList,argList);
@@ -182,29 +172,42 @@ public:
                         alarm(alarmTime);
                     }
                     wait(NULL);
-                    //waitpid(child_pid, NULL, WUNTRACED);
+                    endTime = times(&enTime);
+
+                    // print out the times usage
+                    schedulingReport(startTime, endTime, stTime, enTime, childrenPid[i][1]);
                 }
-                endTime = times(&enTime);
-            
-                // print out the times usage
-                cout.precision(4);
-                cout << fixed; 
-                cout << "<<Process: " << childrenPid[i][1] << " >>" << endl;
-                cout << "Time Elapsed: " 
-                    << (endTime - startTime)/tickPerSec << endl;
-                cout << "User Time: " 
-                    << (enTime.tms_cutime - stTime.tms_cutime)/tickPerSec << endl;
-                cout << "System Time: " 
-                    << (enTime.tms_cstime - stTime.tms_cstime)/tickPerSec << endl;
-                cout << endl;
+                exit(0);
             }
         }
         for(int j=0; j<cmdString.size(); j++){
             waitpid(childrenPid[j][0], NULL, 0);
         }
 	}
-    
 
+    /* 
+    Produce scheduler report with sample format:
+    ----------------------
+    <<Process 1234>>
+    time elapsed: 0.1900
+    user time   : 0.1000
+    system time : 0.0100
+    ----------------------
+    */
+    void schedulingReport(clock_t startTime, clock_t endTime, struct tms stTime, struct tms enTime, pid_t ProcessID){
+        double tickPerSec = (double)sysconf(_SC_CLK_TCK);
+        cout.precision(4);
+        cout << fixed; 
+        cout << "<<Process: " << ProcessID << " >>" << endl;
+        cout << "Time Elapsed: " 
+            << (endTime - startTime)/tickPerSec << endl;
+        cout << "User Time: " 
+        << (enTime.tms_cutime - stTime.tms_cutime)/tickPerSec << endl;
+        cout << "System Time: " 
+            << (enTime.tms_cstime - stTime.tms_cstime)/tickPerSec << endl;
+        cout << endl;
+    }
+    
 };
 
     /*
@@ -215,18 +218,13 @@ public:
     void alarmHandler(int signal){
         cout << "Timeout, automatically kill the child process" << endl;
         pid_t currentPid = getpid();
-        //cout << "cur: " << currentPid << endl;
         pid_t toKillPid = (pid_t) -1;
         for(int i=0; i<childrenPid.size(); i++){
             if(currentPid == childrenPid[i][0]){
                 toKillPid = childrenPid[i][1];
-                //cout << "1: " << childrenPid[i][0] << endl;
-                //cout << "2: " << childrenPid[i][1] << endl;
                 break;
-            }
-            
+            }          
         }
-        //cout << toKillPid << endl;
         if(child_pid != -1) kill(child_pid, SIGTERM);
         else if(toKillPid != -1) kill(toKillPid, SIGTERM);
         else{
@@ -240,14 +238,14 @@ int main(){
     signal(SIGALRM, alarmHandler);
 	scheduler schedulertest;
 	vector<vector<string> > test;
-	test = schedulertest.inputSplitter();
-    //schedulertest.FIFOScheduler(test);
-    schedulertest.ParaScheduler(test);
-    // for(int i=0; i<test.size(); i++){
-    //     for (int j=0; j<test[i].size(); j++){
-    //         cout << test[i][j] << endl;
-    //     }
-    // }
+    string filename = "read.txt";
+	test = schedulertest.inputSplitter(filename);
+    
+    //test case for FIFO mode
+    schedulertest.FIFOScheduler(test);
+
+    //test case for PARA mode
+    //schedulertest.ParaScheduler(test);
 	
 	return 0;
 }
