@@ -1,0 +1,4 @@
+ls -l	1
+cat	2
+echo yes	3
+echo done	1
